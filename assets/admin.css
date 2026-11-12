@@ -1,0 +1,95 @@
+/* Shop Email Campaigns admin. Brand accent used sparingly on top of core WP admin styles. */
+.whm-wrap { --whm-accent: #2271b1; --whm-ink: #1d2327; --whm-surface: #f6f7f7; --whm-line: rgba(29,29,26,.12); }
+.whm-wrap .whm-hint { display: block; color: #646970; font-size: 12px; margin-top: 4px; }
+.whm-wrap .whm-error { color: #b32d2e; }
+.whm-wrap .whm-ok { color: #1a7f37; }
+.whm-wrap .whm-warn { background: #fcf9e8; border-left: 4px solid #dba617; padding: 8px 12px; margin: 0 0 12px; }
+.whm-wrap .whm-danger { color: #b32d2e; }
+.whm-table { margin-top: 12px; }
+.whm-table td { vertical-align: top; }
+.whm-row-actions { white-space: nowrap; }
+.whm-consent { max-width: 280px; font-size: 12px; }
+
+.whm-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; background: #f0f0f1; color: #3c434a; white-space: nowrap; }
+.whm-badge-sending, .whm-badge-scheduled { background: #fcf0e3; color: #8a4a12; }
+.whm-badge-sent, .whm-badge-subscribed { background: #edfaef; color: #1a7f37; }
+.whm-badge-paused { background: #fcf9e8; color: #6f5a00; }
+.whm-badge-cancelled, .whm-badge-unsubscribed, .whm-badge-bounced { background: #fcf0f1; color: #8a2424; }
+.whm-badge-customer { background: #f0f6fc; color: #2c5b88; }
+
+.whm-empty { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 40px; text-align: center; margin-top: 16px; }
+.whm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+.whm-card { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 16px 20px; }
+.whm-card h3 { margin: 0 0 6px; }
+.whm-card .regular-text { width: 100%; }
+.whm-card-links { font-size: 12px; margin-bottom: 0; }
+.whm-tools { margin-top: 32px; }
+.whm-search { float: right; margin: 8px 0; }
+
+/* Designer */
+.whm-d-top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0 16px; }
+.whm-d-title { font-size: 18px; flex: 1 1 280px; min-width: 200px; padding: 6px 10px; }
+.whm-d-top-actions { display: flex; gap: 8px; align-items: center; }
+.whm-save-state { color: #646970; font-size: 13px; }
+.whm-d-main { display: grid; grid-template-columns: minmax(360px, 460px) 1fr; gap: 20px; align-items: start; }
+@media (max-width: 1100px) { .whm-d-main { grid-template-columns: 1fr; } }
+.whm-panel { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+.whm-panel h2 { font-size: 14px; margin: 0 0 10px; text-transform: none; }
+.whm-panel p { margin: 0 0 10px; }
+.whm-panel label strong { display: block; margin-bottom: 4px; }
+.whm-audience .whm-count { font-size: 14px; }
+.whm-audience .whm-count strong { font-size: 18px; color: var(--whm-accent); }
+
+.whm-block { border: 1px solid var(--whm-line); border-radius: 6px; background: var(--whm-surface); }
+.whm-b-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--whm-line); }
+.whm-b-type { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #50575e; }
+.whm-b-tools { display: flex; gap: 10px; }
+.whm-b-tools .button-link { font-size: 12px; text-decoration: none; }
+.whm-b-tools .button-link:disabled { opacity: .35; cursor: default; }
+.whm-b-body { padding: 10px; background: #fff; border-radius: 0 0 6px 6px; }
+.whm-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+.whm-row label { display: flex; gap: 6px; align-items: center; }
+.whm-row .whm-grow { flex: 1 1 200px; }
+.whm-row .whm-grow input { flex: 1; }
+.whm-thumb { max-height: 48px; border-radius: 3px; }
+.whm-code { text-transform: uppercase; letter-spacing: .08em; }
+
+.whm-add { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 10px 0 0; }
+.whm-add > span { font-size: 12px; color: #646970; margin-right: 4px; }
+.whm-insert { text-align: center; margin: 2px 0; }
+.whm-insert-toggle { font-size: 12px; text-decoration: none; color: #646970; padding: 2px 6px; }
+.whm-insert-toggle:hover, .whm-insert-toggle:focus { color: #2271b1; }
+.whm-add-inline { display: none; justify-content: center; margin: 4px 0 8px; }
+.whm-insert.is-open .whm-add-inline { display: flex; }
+
+.whm-rte-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.whm-rte { min-height: 80px; border: 1px solid #8c8f94; border-radius: 3px; padding: 8px 10px; background: #fff; font-size: 14px; line-height: 1.55; }
+.whm-rte:focus { outline: 2px solid var(--whm-accent); outline-offset: 0; border-color: var(--whm-accent); }
+.whm-rte p { margin: 0 0 10px; }
+.whm-rte a { color: #2271b1; }
+
+.whm-d-right { position: sticky; top: 46px; }
+.whm-preview-wrap { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 12px; }
+.whm-preview-bar { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; }
+.whm-preview-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #50575e; }
+.whm-preview-subject strong { color: #1d2327; }
+.whm-seg-toggle .button { margin-left: -1px; border-radius: 0; }
+.whm-seg-toggle .button:first-child { border-radius: 3px 0 0 3px; }
+.whm-seg-toggle .button:last-child { border-radius: 0 3px 3px 0; }
+.whm-seg-toggle .is-active { background: #f0f0f1; border-color: #8c8f94; font-weight: 600; }
+.whm-preview-frame { background: #f0f0f1; border-radius: 6px; display: flex; justify-content: center; overflow: hidden; }
+#whm-preview { width: 100%; height: calc(100vh - 220px); min-height: 560px; border: 0; background: #fff; transition: width .2s; }
+.whm-send-panel { border-color: var(--whm-accent); }
+
+/* Segments */
+.whm-seg-builder, .whm-seg-result { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 16px 20px; margin: 12px 0; max-width: 1000px; }
+.whm-rules { margin: 0 0 12px 20px; }
+.whm-rule { padding: 8px 0; border-bottom: 1px solid #f0f0f1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.whm-rule select.whm-multi { min-width: 220px; min-height: 80px; }
+.whm-chip { display: inline-flex; gap: 4px; align-items: center; background: #f0f6fc; border-radius: 12px; padding: 2px 8px; font-size: 12px; }
+.whm-seg-result h3 { margin-top: 0; }
+#whm-seg-count strong { font-size: 18px; color: var(--whm-accent); }
+
+/* Settings */
+.whm-logo-preview img { max-width: 240px; max-height: 80px; display: block; margin-bottom: 8px; background: #f6f7f7; padding: 8px; border: 1px solid #dcdcde; border-radius: 4px; }
+.whm-legal { max-width: 760px; background: #fff; border-left: 4px solid var(--whm-accent); padding: 10px 14px; }

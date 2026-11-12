@@ -132,21 +132,21 @@ class WHM_Segments {
 		global $wpdb;
 		switch ( $r['type'] ) {
 			case 'purchased_within':
-				return $wpdb->prepare( 's.last_order >= %s', self::since( $r['value'], $r['unit'] ) );
+				return $wpdb->prepare( 'c.last_order >= %s', self::since( $r['value'], $r['unit'] ) );
 			case 'not_purchased_within':
-				return $wpdb->prepare( '(s.orders > 0 AND s.last_order < %s)', self::since( $r['value'], $r['unit'] ) );
+				return $wpdb->prepare( '(c.orders > 0 AND c.last_order < %s)', self::since( $r['value'], $r['unit'] ) );
 			case 'first_purchase_within':
-				return $wpdb->prepare( 's.first_order >= %s', self::since( $r['value'], $r['unit'] ) );
+				return $wpdb->prepare( 'c.first_order >= %s', self::since( $r['value'], $r['unit'] ) );
 			case 'has_purchased':
-				return 's.orders > 0';
+				return 'c.orders > 0';
 			case 'never_purchased':
-				return 's.orders IS NULL';
+				return 'c.orders = 0';
 			case 'order_count_min':
-				return $wpdb->prepare( 'COALESCE(s.orders,0) >= %d', $r['value'] );
+				return $wpdb->prepare( 'c.orders >= %d', $r['value'] );
 			case 'order_count_max':
-				return $wpdb->prepare( 'COALESCE(s.orders,0) <= %d', $r['value'] );
+				return $wpdb->prepare( 'c.orders <= %d', $r['value'] );
 			case 'total_spent_min':
-				return $wpdb->prepare( 'COALESCE(s.spent,0) >= %f', $r['value'] );
+				return $wpdb->prepare( 'c.spent >= %f', $r['value'] );
 			case 'bought_product':
 				return 'c.email IN (' . WHM_Orders::emails_bought_products_sql( self::expand_products( $r['value'] ) ) . ')';
 			case 'not_bought_product':
@@ -186,14 +186,27 @@ class WHM_Segments {
 	}
 
 	/**
+	 * Derived table: every contact plus their purchase stats. Live WooCommerce orders are combined with
+	 * history imported from a CSV (e.g. customers from a previous website): counts and spend are added,
+	 * the latest/earliest dates win. Columns: all contact columns + orders, spent, last_order, first_order.
+	 */
+	public static function contacts_with_stats_sql() {
+		$c     = WHM_Install::contacts_table();
+		$stats = WHM_Orders::stats_sql();
+		return "SELECT cc.*,
+			(COALESCE(s.orders,0) + cc.imported_orders) AS orders,
+			(COALESCE(s.spent,0) + cc.imported_spent) AS spent,
+			NULLIF(GREATEST(COALESCE(s.last_order,'1000-01-01 00:00:00'), COALESCE(cc.imported_last_order,'1000-01-01 00:00:00')),'1000-01-01 00:00:00') AS last_order,
+			NULLIF(LEAST(COALESCE(s.first_order,'9999-12-31 00:00:00'), COALESCE(cc.imported_first_order,'9999-12-31 00:00:00')),'9999-12-31 00:00:00') AS first_order
+			FROM {$c} cc LEFT JOIN ({$stats}) s ON s.email = cc.email";
+	}
+
+	/**
 	 * FROM … WHERE … for a definition, with consent enforced.
 	 */
 	public static function base_sql( array $def, $enforce_consent = true ) {
 		global $wpdb;
 		$def   = self::sanitize_definition( $def );
-		$c     = WHM_Install::contacts_table();
-		$stats = WHM_Orders::stats_sql();
-
 		$conds = array_map( array( __CLASS__, 'rule_sql' ), $def['rules'] );
 		$rules = $conds ? '(' . implode( 'all' === $def['match'] ? ' AND ' : ' OR ', $conds ) . ')' : '1=1';
 
@@ -202,7 +215,7 @@ class WHM_Segments {
 			$statuses = WHM_Settings::sendable_statuses();
 			$consent  = 'c.status IN (' . implode( ',', array_map( fn( $s ) => $wpdb->prepare( '%s', $s ), $statuses ) ) . ')';
 		}
-		return "FROM {$c} c LEFT JOIN ({$stats}) s ON s.email = c.email WHERE {$consent} AND {$rules}";
+		return 'FROM (' . self::contacts_with_stats_sql() . ") c WHERE {$consent} AND {$rules}";
 	}
 
 	public static function count( array $def ) {
@@ -221,8 +234,8 @@ class WHM_Segments {
 	public static function preview( array $def, $limit = 25 ) {
 		global $wpdb;
 		return $wpdb->get_results(
-			'SELECT c.id, c.email, c.first_name, c.last_name, c.status, COALESCE(s.orders,0) AS orders, s.last_order, COALESCE(s.spent,0) AS spent '
-			. self::base_sql( $def ) . ' ORDER BY s.last_order DESC LIMIT ' . absint( $limit )
+			'SELECT c.id, c.email, c.first_name, c.last_name, c.status, c.orders, c.last_order, c.spent '
+			. self::base_sql( $def ) . ' ORDER BY c.last_order IS NULL, c.last_order DESC LIMIT ' . absint( $limit )
 		);
 	}
 

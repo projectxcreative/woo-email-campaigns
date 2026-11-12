@@ -30,6 +30,7 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
   - hooks into WordPress's personal data export and erasure tools.
 - **Live sending master switch**: campaigns can't go to customers until you switch it on in Settings. Test emails always work.
 - **Contacts**: synced automatically from paid WooCommerce orders, CSV import, manual add, search and filters.
+- **Bring your history with you**: import a WooCommerce Customers export from your old shop and its order counts, spend and last-active dates are kept as purchase history, so segments work from day one. Live orders on the new site are added on top.
 - Works with both WooCommerce order storage modes (HPOS and legacy posts).
 
 ## Requirements

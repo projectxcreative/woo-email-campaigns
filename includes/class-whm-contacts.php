@@ -240,13 +240,11 @@ class WHM_Contacts {
 		$per   = max( 1, min( 200, (int) ( $args['per_page'] ?? 50 ) ) );
 		$page  = max( 1, (int) ( $args['page'] ?? 1 ) );
 		$where = implode( ' AND ', $where );
-		$stats = WHM_Orders::stats_sql();
 
 		$count_sql = "SELECT COUNT(*) FROM {$c} c WHERE {$where}";
 		$total     = (int) ( $params ? $wpdb->get_var( $wpdb->prepare( $count_sql, $params ) ) : $wpdb->get_var( $count_sql ) );
 
-		$sql   = "SELECT c.*, COALESCE(s.orders,0) AS orders, s.last_order, COALESCE(s.spent,0) AS spent
-			FROM {$c} c LEFT JOIN ({$stats}) s ON s.email = c.email
+		$sql   = 'SELECT c.* FROM (' . WHM_Segments::contacts_with_stats_sql() . ") c
 			WHERE {$where} ORDER BY c.created_at DESC, c.id DESC LIMIT %d OFFSET %d";
 		$all   = array_merge( $params, array( $per, ( $page - 1 ) * $per ) );
 		$items = $wpdb->get_results( $wpdb->prepare( $sql, $all ) );
@@ -259,16 +257,23 @@ class WHM_Contacts {
 	}
 
 	/**
-	 * Import a CSV. Columns are matched by header name: email (required), first_name, last_name.
+	 * Import a CSV. Columns are matched by header name: email (required), first_name, last_name or name.
+	 * Optional purchase history columns (e.g. a WooCommerce "Customers" export from another site):
+	 * orders, total spend, last active / last order, first order. These feed the segment filters.
+	 * Rows with the same email are combined.
+	 *
 	 * $mode: 'subscribed' (they opted in) or 'customer' (existing customers, soft opt-in).
-	 * People who unsubscribed are never changed by an import.
+	 * People who unsubscribed are never re-subscribed by an import.
 	 */
 	public static function import_csv( $path, $mode, $note ) {
+		global $wpdb;
 		$result = array(
 			'added'   => 0,
 			'updated' => 0,
 			'skipped' => 0,
 			'invalid' => 0,
+			'history' => 0,
+			'no_buy'  => 0,
 		);
 		$fh     = fopen( $path, 'r' );
 		if ( ! $fh ) {
@@ -279,63 +284,132 @@ class WHM_Contacts {
 			fclose( $fh );
 			return new WP_Error( 'whm_csv', 'The file is empty.' );
 		}
-		$map = array();
+		$aliases = array(
+			'email'       => array( 'email', 'email_address', 'e_mail' ),
+			'first_name'  => array( 'first_name', 'firstname', 'first', 'forename' ),
+			'last_name'   => array( 'last_name', 'lastname', 'last', 'surname' ),
+			'name'        => array( 'name', 'full_name' ),
+			'orders'      => array( 'orders', 'order_count', 'number_of_orders', 'total_orders' ),
+			'spent'       => array( 'total_spend', 'total_spent', 'spend', 'money_spent', 'lifetime_value' ),
+			'last_order'  => array( 'last_order', 'last_order_date', 'date_last_order', 'last_active', 'last_purchase' ),
+			'first_order' => array( 'first_order', 'first_order_date', 'date_first_order', 'first_purchase' ),
+		);
+		$map     = array();
 		foreach ( $header as $i => $h ) {
 			$h = strtolower( trim( preg_replace( '/^\xEF\xBB\xBF/', '', (string) $h ) ) );
-			$h = str_replace( array( ' ', '-' ), '_', $h );
-			if ( in_array( $h, array( 'email', 'email_address', 'e_mail' ), true ) ) {
-				$map['email'] = $i;
-			} elseif ( in_array( $h, array( 'first_name', 'firstname', 'first', 'forename' ), true ) ) {
-				$map['first_name'] = $i;
-			} elseif ( in_array( $h, array( 'last_name', 'lastname', 'last', 'surname' ), true ) ) {
-				$map['last_name'] = $i;
-			} elseif ( 'name' === $h && ! isset( $map['first_name'] ) ) {
-				$map['name'] = $i;
+			$h = trim( preg_replace( '/[^a-z0-9]+/', '_', $h ), '_' );
+			foreach ( $aliases as $field => $names ) {
+				if ( ! isset( $map[ $field ] ) && in_array( $h, $names, true ) ) {
+					$map[ $field ] = $i;
+				}
 			}
 		}
 		if ( ! isset( $map['email'] ) ) {
 			fclose( $fh );
 			return new WP_Error( 'whm_csv', 'No "email" column found in the first row.' );
 		}
-		$mode = 'subscribed' === $mode ? 'subscribed' : 'customer';
+		$has_history = isset( $map['orders'] ) || isset( $map['spent'] ) || isset( $map['last_order'] );
+		$col         = function ( $row, $field ) use ( $map ) {
+			return isset( $map[ $field ] ) ? trim( (string) ( $row[ $map[ $field ] ] ?? '' ) ) : '';
+		};
+		$date        = function ( $v ) {
+			$ts = $v ? strtotime( $v ) : false;
+			return $ts ? gmdate( 'Y-m-d H:i:s', $ts ) : null;
+		};
+
+		// First pass: combine rows per email (a customer can appear as both a guest and an account).
+		$people = array();
 		while ( ( $row = fgetcsv( $fh, 0, ',', '"', '' ) ) !== false ) {
-			$email = strtolower( trim( (string) ( $row[ $map['email'] ] ?? '' ) ) );
+			$email = strtolower( $col( $row, 'email' ) );
 			if ( ! is_email( $email ) ) {
 				++$result['invalid'];
 				continue;
 			}
-			$first = isset( $map['first_name'] ) ? (string) ( $row[ $map['first_name'] ] ?? '' ) : '';
-			$last  = isset( $map['last_name'] ) ? (string) ( $row[ $map['last_name'] ] ?? '' ) : '';
-			if ( isset( $map['name'] ) ) {
-				$parts = preg_split( '/\s+/', trim( (string) ( $row[ $map['name'] ] ?? '' ) ), 2 );
+			$first = $col( $row, 'first_name' );
+			$last  = $col( $row, 'last_name' );
+			if ( '' === $first && '' !== $col( $row, 'name' ) ) {
+				$parts = preg_split( '/\s+/', $col( $row, 'name' ), 2 );
 				$first = $parts[0] ?? '';
 				$last  = $parts[1] ?? '';
 			}
+			$p = $people[ $email ] ?? array(
+				'first_name'  => '',
+				'last_name'   => '',
+				'orders'      => 0,
+				'spent'       => 0.0,
+				'last_order'  => null,
+				'first_order' => null,
+			);
+			if ( '' === $p['first_name'] && '' !== $first ) {
+				$p['first_name'] = $first;
+				$p['last_name']  = $last;
+			}
+			$orders       = (int) preg_replace( '/[^0-9]/', '', $col( $row, 'orders' ) );
+			$p['orders'] += $orders;
+			$p['spent']  += (float) preg_replace( '/[^0-9.\-]/', '', $col( $row, 'spent' ) );
+			if ( $orders > 0 || ! isset( $map['orders'] ) ) {
+				$lo = $date( $col( $row, 'last_order' ) );
+				if ( $lo && ( ! $p['last_order'] || $lo > $p['last_order'] ) ) {
+					$p['last_order'] = $lo;
+				}
+				$fo = $date( $col( $row, 'first_order' ) );
+				if ( $fo && ( ! $p['first_order'] || $fo < $p['first_order'] ) ) {
+					$p['first_order'] = $fo;
+				}
+			}
+			$people[ $email ] = $p;
+		}
+		fclose( $fh );
+
+		$mode = 'subscribed' === $mode ? 'subscribed' : 'customer';
+		foreach ( $people as $email => $p ) {
 			$existing = self::get_by_email( $email );
+			// Soft opt-in only covers people who actually bought. Account holders with no orders are left out.
+			if ( 'customer' === $mode && isset( $map['orders'] ) && $p['orders'] < 1 && ! $existing ) {
+				++$result['no_buy'];
+				continue;
+			}
 			$data     = array(
-				'first_name'   => $first,
-				'last_name'    => $last,
+				'first_name'   => $p['first_name'],
+				'last_name'    => $p['last_name'],
 				'source'       => 'import',
 				'status'       => $mode,
 				'consent_text' => $note,
 				'consent_ip'   => '',
 			);
 			if ( ! $existing ) {
-				self::ensure( $email, $data );
+				$id = self::ensure( $email, $data );
 				++$result['added'];
-				continue;
+			} else {
+				$id = (int) $existing->id;
+				self::ensure( $email, $data );
+				if ( in_array( $existing->status, array( 'unsubscribed', 'bounced' ), true ) ) {
+					++$result['skipped'];
+				} else {
+					if ( 'subscribed' === $mode && 'subscribed' !== $existing->status ) {
+						self::subscribe( $email, $data );
+					}
+					++$result['updated'];
+				}
 			}
-			if ( in_array( $existing->status, array( 'unsubscribed', 'bounced' ), true ) ) {
-				++$result['skipped'];
-				continue;
+			// Purchase history is stored even for people who unsubscribed, so reports stay accurate.
+			if ( $id && $has_history ) {
+				$wpdb->update(
+					WHM_Install::contacts_table(),
+					array(
+						'imported_orders'      => (int) $p['orders'],
+						'imported_spent'       => round( (float) $p['spent'], 4 ),
+						'imported_last_order'  => $p['orders'] > 0 || ! isset( $map['orders'] ) ? $p['last_order'] : null,
+						'imported_first_order' => $p['first_order'],
+						'updated_at'           => self::now(),
+					),
+					array( 'id' => $id )
+				);
+				if ( $p['orders'] > 0 ) {
+					++$result['history'];
+				}
 			}
-			self::ensure( $email, $data );
-			if ( 'subscribed' === $mode && 'subscribed' !== $existing->status ) {
-				self::subscribe( $email, $data );
-			}
-			++$result['updated'];
 		}
-		fclose( $fh );
 		return $result;
 	}
 }

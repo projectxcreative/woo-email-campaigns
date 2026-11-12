@@ -773,6 +773,7 @@ class WHM_Admin {
 		wp_nonce_field( 'whm_import' );
 		echo '<input type="hidden" name="action" value="whm_import">'
 			. '<p>Needs an <code>email</code> column. <code>first_name</code>, <code>last_name</code> or <code>name</code> are used if present.</p>'
+			. '<p class="description">Moving from another shop? A WooCommerce Customers export (Analytics → Customers → Download) works as-is: its Orders, Total Spend and Last Active columns are saved as purchase history, so segments like "2+ orders" include it.</p>'
 			. '<p><input type="file" name="csv" accept=".csv,text/csv" required></p>'
 			. '<fieldset><legend><strong>These people…</strong></legend>'
 			. '<label><input type="radio" name="mode" value="subscribed" checked> agreed to receive marketing emails</label><br>'
@@ -840,6 +841,12 @@ class WHM_Admin {
 			exit;
 		}
 		$msg = sprintf( 'Import done: %d added, %d updated, %d left alone because they had unsubscribed, %d invalid rows.', $r['added'], $r['updated'], $r['skipped'], $r['invalid'] );
+		if ( $r['history'] ) {
+			$msg .= sprintf( ' Purchase history saved for %d people.', $r['history'] );
+		}
+		if ( $r['no_buy'] ) {
+			$msg .= sprintf( ' %d had never placed an order, so they weren\'t added as customers.', $r['no_buy'] );
+		}
 		wp_safe_redirect( self::url( 'whm-contacts', array( 'whm_msg' => $msg ) ) );
 		exit;
 	}

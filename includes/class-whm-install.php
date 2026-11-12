@@ -6,7 +6,7 @@ defined( 'ABSPATH' ) || exit;
  */
 class WHM_Install {
 
-	const DB_VERSION = '1';
+	const DB_VERSION = '2';
 
 	public static function contacts_table() {
 		global $wpdb;
@@ -65,6 +65,10 @@ class WHM_Install {
 			consent_ip varchar(45) NOT NULL DEFAULT '',
 			unsubscribed_at datetime NULL,
 			unsubscribe_campaign bigint(20) unsigned NOT NULL DEFAULT 0,
+			imported_orders int(10) unsigned NOT NULL DEFAULT 0,
+			imported_spent decimal(19,4) NOT NULL DEFAULT 0,
+			imported_first_order datetime NULL,
+			imported_last_order datetime NULL,
 			token char(32) NOT NULL,
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,

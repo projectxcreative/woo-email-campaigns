@@ -34,7 +34,7 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
   - **click tracking**: which links each person clicked, and how many people clicked;
   - **orders and revenue** from people who clicked, within 7 days of their first click;
   - **Google Analytics tags** (`utm_source=newsletter`, `utm_medium=email`, `utm_campaign=<campaign name>`) added to links to your own site;
-  - **bounces from SMTP2GO** via a webhook: hard bounces mark the contact as Bounced, three soft bounces in a row do the same, and spam complaints unsubscribe the contact. Copy the webhook address from Settings → Reporting into SMTP2GO → Settings → Webhooks (events: Delivered, Bounce, Spam, Reject, Unsubscribe).
+  - **bounces from SMTP2GO** via a webhook: hard bounces mark the contact as Bounced, three soft bounces in a row do the same, and spam complaints unsubscribe the contact. Copy the webhook address from Settings → Reporting into SMTP2GO → Settings → Webhooks (events: Delivered, Bounce, Spam, Reject, Unsubscribe). Only events for mail sent from the From email's domain are used, so one SMTP2GO account can serve several sites (add more domains with the `whm_webhook_sender_domains` filter).
 - **Contacts**: synced automatically from paid WooCommerce orders, CSV import, manual add, search and filters.
 - **Bring your history with you**: import a WooCommerce Customers export from your old shop and its order counts, spend and last-active dates are kept as purchase history, so segments work from day one. Live orders on the new site are added on top.
 - Works with both WooCommerce order storage modes (HPOS and legacy posts).

@@ -270,6 +270,11 @@ class WHM_Tracking {
 		if ( ! $type || ! $email ) {
 			return false;
 		}
+		// One SMTP2GO account can send for several websites. Only act on mail sent from this shop's domain,
+		// so another site's bounce or complaint never changes a contact here.
+		if ( ! self::from_this_site( self::field( $e, array( 'sender', 'from', 'from_address', 'mail_from' ) ) ) ) {
+			return false;
+		}
 		$contact = WHM_Contacts::get_by_email( $email );
 		if ( ! $contact ) {
 			return false;
@@ -350,6 +355,36 @@ class WHM_Tracking {
 		}
 		delete_transient( 'whm_report_' . $campaign );
 		return true;
+	}
+
+	/**
+	 * Whether a sender address belongs to this shop: same domain as the From email in Settings (or a
+	 * subdomain of it), plus any extra domains from the `whm_webhook_sender_domains` filter.
+	 * Events with no sender are ignored too, since they can't be checked.
+	 */
+	public static function from_this_site( $sender ) {
+		if ( preg_match( '/<([^>]+)>/', (string) $sender, $m ) ) {
+			$sender = $m[1];
+		}
+		$sender = strtolower( trim( (string) $sender ) );
+		$at     = strrpos( $sender, '@' );
+		if ( false === $at ) {
+			return false;
+		}
+		$domain  = substr( $sender, $at + 1 );
+		$from    = strtolower( (string) WHM_Settings::get( 'from_email' ) );
+		$allowed = array();
+		if ( false !== strrpos( $from, '@' ) ) {
+			$allowed[] = substr( $from, strrpos( $from, '@' ) + 1 );
+		}
+		$allowed = array_filter( (array) apply_filters( 'whm_webhook_sender_domains', $allowed ) );
+		foreach ( $allowed as $d ) {
+			$d = strtolower( ltrim( (string) $d, '@.' ) );
+			if ( $domain === $d || str_ends_with( $domain, '.' . $d ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static function mark_bounced( $contact ) {

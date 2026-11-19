@@ -1063,7 +1063,7 @@ class WHM_Admin {
 		$field( 'utm_tags', 'Google Analytics tags', 'checkbox', 'Add utm_source=newsletter, utm_medium=email and the campaign name to links to your shop, so Google Analytics shows visits and sales from each email.' );
 		echo '<tr><th scope="row"><label for="whm-webhook">Bounces from SMTP2GO</label></th><td>'
 			. '<input type="text" readonly class="large-text code" id="whm-webhook" value="' . esc_attr( WHM_Tracking::webhook_url() ) . '" onclick="this.select();">'
-			. '<p class="description">In SMTP2GO go to <strong>Settings → Webhooks → Add webhook</strong>, paste this address, choose the events <strong>Delivered, Bounce, Spam, Reject</strong> and <strong>Unsubscribe</strong>, and save. Hard bounces then mark the contact as Bounced, spam complaints unsubscribe them, and each campaign report shows deliveries and bounces. Keep this address private: it contains a secret key.</p>'
+			. '<p class="description">In SMTP2GO go to <strong>Settings → Webhooks → Add webhook</strong>, paste this address, choose the events <strong>Delivered, Bounce, Spam, Reject</strong> and <strong>Unsubscribe</strong>, and save. Hard bounces then mark the contact as Bounced, spam complaints unsubscribe them, and each campaign report shows deliveries and bounces. If your SMTP2GO account also sends for other websites, that\'s fine: only emails sent from your From email\'s domain are used, and everything else is ignored.</p><p class="description">Keep this address private: it contains a secret key.</p>'
 			. '</td></tr>';
 		echo '</table>';
 

@@ -154,6 +154,7 @@ class WHM_Contacts {
 	public static function delete( $id ) {
 		global $wpdb;
 		$wpdb->delete( WHM_Install::queue_table(), array( 'contact_id' => absint( $id ) ) );
+		WHM_Tracking::forget_contact( $id );
 		return $wpdb->delete( WHM_Install::contacts_table(), array( 'id' => absint( $id ) ) );
 	}
 

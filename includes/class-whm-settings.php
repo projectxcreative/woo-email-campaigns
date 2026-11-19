@@ -53,6 +53,9 @@ class WHM_Settings {
 				'live_sending'    => 0, // Master switch: campaigns cannot go out until this is on.
 				'batch_size'      => 40,
 				'batch_interval'  => 60,
+				// Reporting.
+				'click_tracking'  => 1,
+				'utm_tags'        => 1,
 				// Consent.
 				'soft_opt_in'     => 0, // Allow emailing customers who have not opted in or out (PECR soft opt-in).
 				'checkout_opt_in' => 0,
@@ -120,8 +123,13 @@ class WHM_Settings {
 		if ( isset( $input['batch_interval'] ) ) {
 			$clean['batch_interval'] = max( 30, min( 3600, absint( $input['batch_interval'] ) ) );
 		}
-		foreach ( array( 'live_sending', 'soft_opt_in', 'checkout_opt_in', 'account_opt_in' ) as $k ) {
-			$clean[ $k ] = empty( $input[ $k ] ) ? 0 : 1;
+		// Tick boxes: an unticked box is missing from a submitted form, so only switch one off when
+		// the whole Settings form was sent (or the key is given), never on a partial save.
+		$full_form = ! empty( $input['_form'] );
+		foreach ( array( 'live_sending', 'soft_opt_in', 'checkout_opt_in', 'account_opt_in', 'click_tracking', 'utm_tags' ) as $k ) {
+			if ( $full_form || array_key_exists( $k, $input ) ) {
+				$clean[ $k ] = empty( $input[ $k ] ) ? 0 : 1;
+			}
 		}
 
 		update_option( self::OPTION, $clean );

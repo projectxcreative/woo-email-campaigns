@@ -217,6 +217,9 @@ class WHM_Sender {
 		$subject = $subject_prefix . strtr( $data['subject'], $tags );
 		$html    = WHM_Renderer::render( $data['blocks'], $data, $contact, $campaign_id );
 		$text    = WHM_Renderer::render_text( $data['blocks'], $data, $contact, $campaign_id );
+		// Click tracking and Google Analytics tags (real campaign sends only, not tests).
+		$html = WHM_Tracking::apply_html( $html, $contact, $campaign_id );
+		$text = WHM_Tracking::apply_text( $text, $contact, $campaign_id );
 
 		$alt = function ( $phpmailer ) use ( $text ) {
 			$phpmailer->AltBody = $text; // phpcs:ignore WordPress.NamingConventions

@@ -29,6 +29,12 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
   - people who unsubscribed are never re-added by imports or order syncs;
   - hooks into WordPress's personal data export and erasure tools.
 - **Live sending master switch**: campaigns can't go to customers until you switch it on in Settings. Test emails always work.
+- **Campaign reports** (Email Marketing → Reports), with no open tracking:
+  - sent, delivered, bounced (hard and soft), spam complaints and unsubscribes for each campaign;
+  - **click tracking**: which links each person clicked, and how many people clicked;
+  - **orders and revenue** from people who clicked, within 7 days of their first click;
+  - **Google Analytics tags** (`utm_source=newsletter`, `utm_medium=email`, `utm_campaign=<campaign name>`) added to links to your own site;
+  - **bounces from SMTP2GO** via a webhook: hard bounces mark the contact as Bounced, three soft bounces in a row do the same, and spam complaints unsubscribe the contact. Copy the webhook address from Settings → Reporting into SMTP2GO → Settings → Webhooks (events: Delivered, Bounce, Spam, Reject, Unsubscribe).
 - **Contacts**: synced automatically from paid WooCommerce orders, CSV import, manual add, search and filters.
 - **Bring your history with you**: import a WooCommerce Customers export from your old shop and its order counts, spend and last-active dates are kept as purchase history, so segments work from day one. Live orders on the new site are added on top.
 - Works with both WooCommerce order storage modes (HPOS and legacy posts).
@@ -53,6 +59,10 @@ Existing customers are pulled in from past orders in the background on activatio
 When you press send, the plugin freezes the audience into a queue and sends `batch size` emails every `batch interval` seconds using Action Scheduler (which runs on WP-Cron). Each recipient is re-checked just before their email goes out, so anyone who unsubscribes mid-send is skipped. Progress shows on the Campaigns page.
 
 For reliable timing on low-traffic sites, trigger WP-Cron from a real cron job.
+
+## Why no open tracking?
+
+Open tracking relies on a hidden image. Apple Mail loads every image automatically and many apps block them, so open rates are unreliable, and the UK ICO treats tracking pixels as needing consent under PECR. Clicks, orders and bounces are measured instead.
 
 ## Customising
 

@@ -93,3 +93,12 @@
 /* Settings */
 .whm-logo-preview img { max-width: 240px; max-height: 80px; display: block; margin-bottom: 8px; background: #f6f7f7; padding: 8px; border: 1px solid #dcdcde; border-radius: 4px; }
 .whm-legal { max-width: 760px; background: #fff; border-left: 4px solid var(--whm-accent); padding: 10px 14px; }
+
+/* Reports */
+.whm-report-meta { margin: 8px 0 16px; }
+.whm-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 0 0 24px; }
+.whm-tile { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 14px 16px; }
+.whm-tile-label { color: #646970; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.whm-tile-value { font-size: 28px; line-height: 1.2; font-weight: 600; margin: 4px 0; color: #1d2327; }
+.whm-tile-sub { color: #646970; font-size: 12px; }
+.whm-url { word-break: break-all; }

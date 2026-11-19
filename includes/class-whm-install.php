@@ -6,7 +6,7 @@ defined( 'ABSPATH' ) || exit;
  */
 class WHM_Install {
 
-	const DB_VERSION = '2';
+	const DB_VERSION = '3';
 
 	public static function contacts_table() {
 		global $wpdb;
@@ -89,9 +89,29 @@ class WHM_Install {
 			attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
 			error varchar(255) NOT NULL DEFAULT '',
 			sent_at datetime NULL,
+			delivery varchar(20) NOT NULL DEFAULT '',
+			delivery_note varchar(255) NOT NULL DEFAULT '',
+			delivery_at datetime NULL,
 			PRIMARY KEY  (id),
 			UNIQUE KEY campaign_contact (campaign_id,contact_id),
-			KEY campaign_status (campaign_id,status)
+			KEY campaign_status (campaign_id,status),
+			KEY contact_sent (contact_id,sent_at)
+			) {$charset};"
+		);
+
+		$e = $wpdb->prefix . 'whm_events';
+		dbDelta(
+			"CREATE TABLE {$e} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			campaign_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			contact_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			type varchar(20) NOT NULL,
+			url varchar(500) NOT NULL DEFAULT '',
+			detail varchar(255) NOT NULL DEFAULT '',
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY campaign_type (campaign_id,type),
+			KEY contact_type (contact_id,type)
 			) {$charset};"
 		);
 	}

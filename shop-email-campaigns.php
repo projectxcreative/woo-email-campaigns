@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Shop Email Campaigns
  * Description:       Design branded marketing emails, build customer segments from WooCommerce order history, save templates and send in batches through wp_mail. Includes unsubscribe handling and consent records for UK GDPR / PECR.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            Project X Creative
  * Author URI:        https://projectxcreative.com
  * Requires at least: 6.4
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WHM_VERSION', '1.0.0' );
+define( 'WHM_VERSION', '1.1.0' );
 define( 'WHM_FILE', __FILE__ );
 define( 'WHM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WHM_URL', plugin_dir_url( __FILE__ ) );
@@ -26,6 +26,7 @@ require_once WHM_DIR . 'includes/class-whm-contacts.php';
 require_once WHM_DIR . 'includes/class-whm-segments.php';
 require_once WHM_DIR . 'includes/class-whm-renderer.php';
 require_once WHM_DIR . 'includes/class-whm-sender.php';
+require_once WHM_DIR . 'includes/class-whm-tracking.php';
 require_once WHM_DIR . 'includes/class-whm-public.php';
 require_once WHM_DIR . 'includes/class-whm-consent.php';
 require_once WHM_DIR . 'includes/class-whm-privacy.php';
@@ -53,6 +54,7 @@ function whm_boot() {
 	WHM_Install::register_post_types();
 	WHM_Contacts::init();
 	WHM_Sender::init();
+	WHM_Tracking::init();
 	WHM_Public::init();
 	WHM_Consent::init();
 	WHM_Privacy::init();

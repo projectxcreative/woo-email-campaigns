@@ -26,6 +26,7 @@ class WHM_Admin {
 		add_menu_page( 'Email Marketing', 'Email Marketing', self::CAP, 'whm', array( __CLASS__, 'page_campaigns' ), 'dashicons-email-alt', 56 );
 		add_submenu_page( 'whm', 'Campaigns', 'Campaigns', self::CAP, 'whm', array( __CLASS__, 'page_campaigns' ) );
 		add_submenu_page( 'whm', 'Design email', 'New campaign', self::CAP, 'whm-edit', array( __CLASS__, 'page_designer' ) );
+		add_submenu_page( 'whm', 'Campaign reports', 'Reports', self::CAP, 'whm-reports', array( __CLASS__, 'page_reports' ) );
 		add_submenu_page( 'whm', 'Templates', 'Templates', self::CAP, 'whm-templates', array( __CLASS__, 'page_templates' ) );
 		add_submenu_page( 'whm', 'Segments', 'Segments', self::CAP, 'whm-segments', array( __CLASS__, 'page_segments' ) );
 		add_submenu_page( 'whm', 'Contacts', 'Contacts', self::CAP, 'whm-contacts', array( __CLASS__, 'page_contacts' ) );
@@ -148,6 +149,13 @@ class WHM_Admin {
 				if ( $stats['unsubscribed'] ) {
 					$progress .= sprintf( ', %d unsubscribed', $stats['unsubscribed'] );
 				}
+				$sum = WHM_Tracking::summary( $p->ID );
+				if ( $sum['clickers'] ) {
+					$progress .= sprintf( ', %d clicked', $sum['clickers'] );
+				}
+				if ( $sum['bounced'] ) {
+					$progress .= sprintf( ', %d bounced', $sum['bounced'] );
+				}
 			} elseif ( 'scheduled' === $status ) {
 				$progress = 'Goes out ' . self::fmt_time( get_post_meta( $p->ID, '_whm_send_at', true ) );
 			}
@@ -158,6 +166,9 @@ class WHM_Admin {
 
 			$actions = array();
 			$actions[] = '<a href="' . esc_url( $edit ) . '">' . ( in_array( $status, array( 'draft', 'scheduled' ), true ) ? 'Edit' : 'View' ) . '</a>';
+			if ( $total ) {
+				$actions[] = '<a href="' . esc_url( self::url( 'whm-reports', array( 'campaign' => $p->ID ) ) ) . '">Report</a>';
+			}
 			foreach ( self::campaign_actions_for( $status ) as $act => $label ) {
 				$url       = wp_nonce_url( admin_url( 'admin-post.php?action=whm_campaign_action&do=' . $act . '&id=' . $p->ID ), 'whm_campaign_' . $p->ID );
 				$confirm   = in_array( $act, array( 'delete', 'cancel' ), true ) ? ' onclick="return confirm(\'Are you sure?\');"' : '';
@@ -861,6 +872,127 @@ class WHM_Admin {
 
 	/* ------------------------------------------------------------------ Settings */
 
+	/* ------------------------------------------------------------------ Reports */
+
+	private static function pct( $n, $of ) {
+		return $of ? round( 100 * $n / $of, 1 ) . '%' : '–';
+	}
+
+	private static function money( $v ) {
+		return wp_strip_all_tags( html_entity_decode( wc_price( $v ), ENT_QUOTES, 'UTF-8' ) );
+	}
+
+	public static function page_reports() {
+		$id = isset( $_GET['campaign'] ) ? absint( $_GET['campaign'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		if ( $id && 'whm_campaign' === get_post_type( $id ) ) {
+			self::report_detail( $id );
+			return;
+		}
+		self::header( 'Campaign reports' );
+		$posts = get_posts(
+			array(
+				'post_type'      => 'whm_campaign',
+				'post_status'    => 'any',
+				'posts_per_page' => 100,
+				'meta_key'       => '_whm_started', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'orderby'        => 'meta_value_num',
+				'order'          => 'DESC',
+			)
+		);
+		if ( ! $posts ) {
+			echo '<div class="whm-empty"><h2>No reports yet</h2><p>Once a campaign has been sent, its results show here: deliveries, bounces, unsubscribes, clicks and the orders that followed.</p></div></div>';
+			return;
+		}
+		echo '<table class="widefat striped whm-table"><thead><tr><th>Campaign</th><th>Sent</th><th>Delivered</th><th>Bounced</th><th>Unsubscribed</th><th>Clicked</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>';
+		foreach ( $posts as $p ) {
+			$r       = WHM_Tracking::report( $p->ID );
+			$bounced = $r['delivery']['hard_bounce'] + $r['delivery']['soft_bounce'];
+			echo '<tr><td><strong><a href="' . esc_url( self::url( 'whm-reports', array( 'campaign' => $p->ID ) ) ) . '">' . esc_html( $p->post_title ? $p->post_title : '(untitled)' ) . '</a></strong><br><span class="description">' . self::fmt_time( get_post_meta( $p->ID, '_whm_started', true ) ) . '</span></td>' // phpcs:ignore WordPress.Security.EscapeOutput
+				. '<td>' . (int) $r['sent'] . '</td>'
+				. '<td>' . ( $r['delivery_known'] ? (int) $r['delivery']['delivered'] : '–' ) . '</td>'
+				. '<td>' . ( $r['delivery_known'] ? $bounced . ' <span class="description">(' . esc_html( self::pct( $bounced, $r['sent'] ) ) . ')</span>' : '–' ) . '</td>'
+				. '<td>' . (int) $r['unsubscribed'] . ' <span class="description">(' . esc_html( self::pct( $r['unsubscribed'], $r['sent'] ) ) . ')</span></td>'
+				. '<td>' . (int) $r['clickers'] . ' <span class="description">(' . esc_html( self::pct( $r['clickers'], $r['sent'] ) ) . ')</span></td>'
+				. '<td>' . (int) $r['orders'] . '</td>'
+				. '<td>' . esc_html( self::money( $r['revenue'] ) ) . '</td></tr>';
+		}
+		echo '</tbody></table>';
+		echo '<p class="description">Delivered and bounced need the SMTP2GO webhook (see <a href="' . esc_url( self::url( 'whm-settings' ) ) . '">Settings → Reporting</a>). Orders and revenue count orders placed by people who clicked, within ' . (int) WHM_Tracking::ATTRIBUTION_DAYS . ' days of their first click.</p></div>';
+	}
+
+	private static function report_detail( $id ) {
+		$back = '<a href="' . esc_url( self::url( 'whm-reports' ) ) . '" class="page-title-action">All reports</a>';
+		self::header( 'Report: ' . get_the_title( $id ), $back );
+		$r       = WHM_Tracking::report( $id );
+		$sent    = (int) $r['sent'];
+		$bounced = $r['delivery']['hard_bounce'] + $r['delivery']['soft_bounce'];
+		$seg     = get_post_meta( $id, '_whm_segment_label', true );
+
+		echo '<p class="whm-report-meta"><strong>' . esc_html( get_post_meta( $id, '_whm_subject', true ) ) . '</strong><br>'
+			. 'Sent ' . self::fmt_time( get_post_meta( $id, '_whm_started', true ) ) . ( $seg ? ' to “' . esc_html( $seg ) . '”' : '' ) . ' · ' . self::status_badge( WHM_Sender::status( $id ) ) // phpcs:ignore WordPress.Security.EscapeOutput
+			. ' · <a href="' . esc_url( self::url( 'whm-edit', array( 'campaign' => $id ) ) ) . '">View email</a></p>';
+
+		$tile = function ( $label, $value, $sub = '' ) {
+			echo '<div class="whm-tile"><div class="whm-tile-label">' . esc_html( $label ) . '</div><div class="whm-tile-value">' . esc_html( $value ) . '</div>' . ( $sub ? '<div class="whm-tile-sub">' . esc_html( $sub ) . '</div>' : '' ) . '</div>';
+		};
+		echo '<div class="whm-tiles">';
+		$tile( 'Sent', number_format_i18n( $sent ), $r['total'] && $r['total'] !== $sent ? sprintf( 'of %s in the audience', number_format_i18n( $r['total'] ) ) : '' );
+		if ( $r['delivery_known'] ) {
+			$tile( 'Delivered', number_format_i18n( $r['delivery']['delivered'] ), self::pct( $r['delivery']['delivered'], $sent ) . ' of sent' );
+			$tile( 'Bounced', number_format_i18n( $bounced ), sprintf( '%s · %d hard, %d soft', self::pct( $bounced, $sent ), $r['delivery']['hard_bounce'], $r['delivery']['soft_bounce'] ) );
+			$tile( 'Spam complaints', number_format_i18n( $r['delivery']['spam'] ), self::pct( $r['delivery']['spam'], $sent ) );
+		} else {
+			$tile( 'Delivered', '–', 'Connect SMTP2GO in Settings' );
+			$tile( 'Bounced', '–', 'Connect SMTP2GO in Settings' );
+		}
+		$tile( 'Unsubscribed', number_format_i18n( $r['unsubscribed'] ), self::pct( $r['unsubscribed'], $sent ) );
+		$tile( 'Clicked', number_format_i18n( $r['clickers'] ), sprintf( '%s of sent · %s clicks in total', self::pct( $r['clickers'], $sent ), number_format_i18n( $r['clicks'] ) ) );
+		$tile( 'Orders after clicking', number_format_i18n( $r['orders'] ), self::money( $r['revenue'] ) . ' within ' . WHM_Tracking::ATTRIBUTION_DAYS . ' days' );
+		if ( $r['failed'] || $r['skipped'] ) {
+			$tile( 'Not sent', number_format_i18n( $r['failed'] + $r['skipped'] ), sprintf( '%d failed, %d skipped (unsubscribed before their turn)', $r['failed'], $r['skipped'] ) );
+		}
+		echo '</div>';
+
+		echo '<h2>Links clicked</h2>';
+		if ( $r['links'] ) {
+			echo '<table class="widefat striped whm-table"><thead><tr><th>Link</th><th>People</th><th>Clicks</th></tr></thead><tbody>';
+			foreach ( $r['links'] as $l ) {
+				echo '<tr><td class="whm-url"><a href="' . esc_url( $l->url ) . '" target="_blank" rel="noopener">' . esc_html( preg_replace( '#^https?://#', '', $l->url ) ) . '</a></td><td>' . (int) $l->people . '</td><td>' . (int) $l->clicks . '</td></tr>';
+			}
+			echo '</tbody></table>';
+		} else {
+			echo '<p>No clicks yet.' . ( WHM_Settings::get( 'click_tracking' ) ? '' : ' Click tracking is switched off in Settings.' ) . '</p>';
+		}
+
+		echo '<h2>Bounces and complaints</h2>';
+		if ( $r['problems'] ) {
+			$labels = array(
+				'hard_bounce' => 'Hard bounce',
+				'soft_bounce' => 'Soft bounce',
+				'spam'        => 'Spam complaint',
+				'rejected'    => 'Rejected by SMTP2GO',
+			);
+			echo '<table class="widefat striped whm-table"><thead><tr><th>Email</th><th>What happened</th><th>Reason</th><th>When</th><th>Contact now</th></tr></thead><tbody>';
+			foreach ( $r['problems'] as $b ) {
+				echo '<tr><td>' . esc_html( $b->email ) . '</td><td>' . esc_html( $labels[ $b->delivery ] ?? $b->delivery ) . '</td><td class="whm-consent">' . esc_html( $b->delivery_note ) . '</td><td>' . esc_html( $b->delivery_at ? wp_date( 'j M Y, H:i', strtotime( $b->delivery_at . ' UTC' ) ) : '' ) . '</td><td>' . ( $b->contact_status ? self::status_badge( $b->contact_status ) : '' ) . '</td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput
+			}
+			echo '</tbody></table>';
+		} else {
+			echo '<p>' . ( $r['delivery_known'] ? 'None. Every email that SMTP2GO reported on was delivered.' : 'Nothing reported yet. Bounces show here once the SMTP2GO webhook is set up in Settings → Reporting.' ) . '</p>';
+		}
+
+		if ( $r['failed_rows'] ) {
+			echo '<h2>Failed to send</h2><p class="description">These never left the site, usually because the mail service refused them. They were tried three times.</p>';
+			echo '<table class="widefat striped whm-table"><thead><tr><th>Email</th><th>Error</th></tr></thead><tbody>';
+			foreach ( $r['failed_rows'] as $f ) {
+				echo '<tr><td>' . esc_html( $f->email ) . '</td><td>' . esc_html( $f->error ) . '</td></tr>';
+			}
+			echo '</tbody></table>';
+		}
+
+		echo '<p class="description whm-tools">Some email security filters (common in work email) check links automatically, which can add a few clicks. Hard bounces and spam complaints stop future emails to that address straight away; three soft bounces in a row do the same. Figures refresh every few minutes.</p></div>';
+	}
+
 	public static function page_settings() {
 		self::header( 'Email settings' );
 		$s    = WHM_Settings::all();
@@ -886,7 +1018,7 @@ class WHM_Admin {
 
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="whm-settings">';
 		wp_nonce_field( 'whm_save_settings' );
-		echo '<input type="hidden" name="action" value="whm_save_settings">';
+		echo '<input type="hidden" name="action" value="whm_save_settings"><input type="hidden" name="whm[_form]" value="1">';
 
 		echo '<h2>Sending</h2><table class="form-table" role="presentation">';
 		$field( 'live_sending', 'Live sending', 'checkbox', 'Allow campaigns to be sent to customers. Leave off while you\'re setting up; test emails work either way.' );
@@ -924,6 +1056,15 @@ class WHM_Admin {
 		$field( 'checkout_opt_in', 'Checkout sign-up', 'checkbox', 'Show an unticked "keep me posted" box at checkout.' );
 		$field( 'account_opt_in', 'My Account sign-up', 'checkbox', 'Let customers opt in or out from My Account → Account details.' );
 		$field( 'opt_in_label', 'Sign-up wording', 'text', 'This exact wording is stored with each person\'s consent record.' );
+		echo '</table>';
+
+		echo '<h2>Reporting</h2><table class="form-table" role="presentation">';
+		$field( 'click_tracking', 'Click tracking', 'checkbox', 'Count who clicks which links. Links go through your site for a moment before opening, so they still work if you turn this off later.' );
+		$field( 'utm_tags', 'Google Analytics tags', 'checkbox', 'Add utm_source=newsletter, utm_medium=email and the campaign name to links to your shop, so Google Analytics shows visits and sales from each email.' );
+		echo '<tr><th scope="row"><label for="whm-webhook">Bounces from SMTP2GO</label></th><td>'
+			. '<input type="text" readonly class="large-text code" id="whm-webhook" value="' . esc_attr( WHM_Tracking::webhook_url() ) . '" onclick="this.select();">'
+			. '<p class="description">In SMTP2GO go to <strong>Settings → Webhooks → Add webhook</strong>, paste this address, choose the events <strong>Delivered, Bounce, Spam, Reject</strong> and <strong>Unsubscribe</strong>, and save. Hard bounces then mark the contact as Bounced, spam complaints unsubscribe them, and each campaign report shows deliveries and bounces. Keep this address private: it contains a secret key.</p>'
+			. '</td></tr>';
 		echo '</table>';
 
 		submit_button( 'Save settings' );

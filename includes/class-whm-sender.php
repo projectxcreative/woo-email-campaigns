@@ -136,6 +136,7 @@ class WHM_Sender {
 		$data  = self::campaign_data( $campaign_id );
 		$allow = WHM_Settings::sendable_statuses();
 		$start = time();
+		$throttled = false;
 
 		foreach ( $rows as $row ) {
 			if ( 'sending' !== self::status( $campaign_id ) ) {
@@ -148,6 +149,13 @@ class WHM_Sender {
 				continue;
 			}
 			$sent = self::send_one( $data, $contact, $campaign_id );
+			if ( ! $sent && self::is_limit_error( self::$last_error ) ) {
+				// The mail service is refusing because of a sending limit (per hour, per day or per month).
+				// Leave this person waiting with their attempts untouched and try again later.
+				$wpdb->update( $q, array( 'error' => self::$last_error ), array( 'id' => $row->id ) );
+				$throttled = true;
+				break;
+			}
 			if ( $sent ) {
 				$wpdb->update(
 					$q,
@@ -176,6 +184,23 @@ class WHM_Sender {
 		}
 
 		delete_transient( $lock );
+
+		if ( $throttled ) {
+			$wait = (int) apply_filters( 'whm_limit_backoff', 30 * MINUTE_IN_SECONDS, $campaign_id, self::$last_error );
+			update_post_meta(
+				$campaign_id,
+				'_whm_throttled',
+				array(
+					'until' => time() + $wait,
+					'error' => self::$last_error,
+				)
+			);
+			if ( 'sending' === self::status( $campaign_id ) ) {
+				as_schedule_single_action( time() + $wait, 'whm_process_batch', array( $campaign_id ), 'whm' );
+			}
+			return;
+		}
+		delete_post_meta( $campaign_id, '_whm_throttled' );
 
 		$pending = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$q} WHERE campaign_id = %d AND status = 'pending'", $campaign_id ) );
 		if ( $pending && 'sending' === self::status( $campaign_id ) ) {
@@ -253,6 +278,76 @@ class WHM_Sender {
 			$results[ $email ] = self::send_one( $data, $contact, 0, '[Test] ' ) ? 'sent' : ( self::$last_error ? self::$last_error : 'failed' );
 		}
 		return $results;
+	}
+
+	/**
+	 * Whether a send error means "slow down" (rate limit or daily/monthly quota) rather than a bad address.
+	 */
+	public static function is_limit_error( $error ) {
+		$pattern = apply_filters( 'whm_limit_error_pattern', '/rate ?limit|too many|quota|limit (has been )?(reached|exceeded)|exceeded (your|the|its)? ?\w* ?limit|throttl|try again later|sending limit|daily limit|monthly limit|credits/i' );
+		return '' !== (string) $error && (bool) preg_match( $pattern, (string) $error );
+	}
+
+	/**
+	 * When a campaign is waiting for a sending limit to reset, the time it will try again. 0 otherwise.
+	 */
+	public static function throttled_until( $campaign_id ) {
+		$t = get_post_meta( $campaign_id, '_whm_throttled', true );
+		return is_array( $t ) && ! empty( $t['until'] ) && 'sending' === self::status( $campaign_id ) ? (int) $t['until'] : 0;
+	}
+
+	/**
+	 * Failed recipients grouped by error message, for the "Retry failed" choice.
+	 */
+	public static function failed_errors( $campaign_id ) {
+		global $wpdb;
+		$q = WHM_Install::queue_table();
+		return $wpdb->get_results( $wpdb->prepare( "SELECT error, COUNT(*) AS n FROM {$q} WHERE campaign_id = %d AND status = 'failed' GROUP BY error ORDER BY n DESC", $campaign_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL
+	}
+
+	/**
+	 * Put a campaign's failed recipients back in the queue for a fresh three attempts.
+	 * Only rows with status "failed" are touched. People who have since unsubscribed or bounced
+	 * (or anyone no longer allowed to receive marketing) are marked skipped instead.
+	 *
+	 * @param int         $campaign_id
+	 * @param string|null $only_error  Retry only failures with exactly this error message.
+	 * @return array|WP_Error  array( 'requeued' => n, 'skipped' => n )
+	 */
+	public static function retry_failed( $campaign_id, $only_error = null ) {
+		global $wpdb;
+		$campaign_id = (int) $campaign_id;
+		$status      = self::status( $campaign_id );
+		if ( ! in_array( $status, array( 'sending', 'paused', 'sent' ), true ) ) {
+			return new WP_Error( 'whm_state', 'Only a campaign that has been sent (or is sending) can retry failed emails.' );
+		}
+		if ( ! WHM_Settings::get( 'live_sending' ) ) {
+			return new WP_Error( 'whm_off', 'Live sending is switched off in Settings.' );
+		}
+		$q       = WHM_Install::queue_table();
+		$c       = WHM_Install::contacts_table();
+		$allow   = WHM_Settings::sendable_statuses();
+		$in      = implode( ',', array_map( fn( $s ) => $wpdb->prepare( '%s', $s ), $allow ) );
+		$err_sql = null === $only_error ? '' : $wpdb->prepare( ' AND x.error = %s', $only_error );
+
+		// Not allowed any more: unsubscribed, bounced, deleted, or no consent.
+		$skipped = (int) $wpdb->query( $wpdb->prepare( "UPDATE {$q} x LEFT JOIN {$c} k ON k.id = x.contact_id SET x.status = 'skipped', x.error = 'No longer subscribed' WHERE x.campaign_id = %d AND x.status = 'failed'{$err_sql} AND ( k.id IS NULL OR k.status NOT IN ({$in}) )", $campaign_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL
+		$requeued = (int) $wpdb->query( $wpdb->prepare( "UPDATE {$q} x SET x.status = 'pending', x.attempts = 0, x.error = '' WHERE x.campaign_id = %d AND x.status = 'failed'{$err_sql}", $campaign_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL
+
+		if ( $requeued ) {
+			if ( 'sent' === $status ) {
+				update_post_meta( $campaign_id, '_whm_status', 'sending' );
+				delete_post_meta( $campaign_id, '_whm_finished' );
+			}
+			if ( 'sending' === self::status( $campaign_id ) && ! as_has_scheduled_action( 'whm_process_batch', array( $campaign_id ), 'whm' ) ) {
+				as_enqueue_async_action( 'whm_process_batch', array( $campaign_id ), 'whm' );
+			}
+		}
+		delete_transient( 'whm_report_' . $campaign_id );
+		return array(
+			'requeued' => $requeued,
+			'skipped'  => $skipped,
+		);
 	}
 
 	public static function pause( $campaign_id ) {

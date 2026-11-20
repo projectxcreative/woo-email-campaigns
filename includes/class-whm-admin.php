@@ -149,6 +149,10 @@ class WHM_Admin {
 				if ( $stats['unsubscribed'] ) {
 					$progress .= sprintf( ', %d unsubscribed', $stats['unsubscribed'] );
 				}
+				$until = WHM_Sender::throttled_until( $p->ID );
+				if ( $until ) {
+					$progress .= '<br><span class="whm-hint">Paused by the mail service\'s sending limit. Trying again ' . self::fmt_time( $until ) . '.</span>';
+				}
 				$sum = WHM_Tracking::summary( $p->ID );
 				if ( $sum['clickers'] ) {
 					$progress .= sprintf( ', %d clicked', $sum['clickers'] );
@@ -169,9 +173,16 @@ class WHM_Admin {
 			if ( $total ) {
 				$actions[] = '<a href="' . esc_url( self::url( 'whm-reports', array( 'campaign' => $p->ID ) ) ) . '">Report</a>';
 			}
-			foreach ( self::campaign_actions_for( $status ) as $act => $label ) {
+			$acts = self::campaign_actions_for( $status );
+			if ( $stats['failed'] && in_array( $status, array( 'sending', 'paused', 'sent' ), true ) ) {
+				$acts = array( 'retry' => sprintf( 'Retry failed (%d)', $stats['failed'] ) ) + $acts;
+			}
+			foreach ( $acts as $act => $label ) {
 				$url       = wp_nonce_url( admin_url( 'admin-post.php?action=whm_campaign_action&do=' . $act . '&id=' . $p->ID ), 'whm_campaign_' . $p->ID );
 				$confirm   = in_array( $act, array( 'delete', 'cancel' ), true ) ? ' onclick="return confirm(\'Are you sure?\');"' : '';
+				if ( 'retry' === $act ) {
+					$confirm = ' onclick="return confirm(' . esc_attr( wp_json_encode( sprintf( 'Re-send to %d %s who failed? People who already got this email won\'t get it again.', $stats['failed'], 1 === $stats['failed'] ? 'person' : 'people' ) ) ) . ');"';
+				}
 				$actions[] = '<a href="' . esc_url( $url ) . '"' . $confirm . '>' . esc_html( $label ) . '</a>';
 			}
 
@@ -228,6 +239,25 @@ class WHM_Admin {
 			case 'cancel':
 				WHM_Sender::cancel( $id );
 				$msg = 'Campaign stopped.';
+				break;
+			case 'retry':
+				$only = null;
+				if ( isset( $_POST['only_error'] ) && '__all__' !== $_POST['only_error'] ) { // phpcs:ignore WordPress.Security.NonceVerification -- checked in self::check().
+					$only = sanitize_text_field( wp_unslash( $_POST['only_error'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+				}
+				$r = WHM_Sender::retry_failed( $id, $only );
+				if ( is_wp_error( $r ) ) {
+					$err = $r->get_error_message();
+				} else {
+					$msg = sprintf( '%d %s back in the queue and will be sent shortly.', $r['requeued'], 1 === $r['requeued'] ? 'person is' : 'people are' );
+					if ( $r['skipped'] ) {
+						$msg .= sprintf( ' %d skipped because they have since unsubscribed or bounced.', $r['skipped'] );
+					}
+				}
+				if ( isset( $_REQUEST['back'] ) && 'report' === $_REQUEST['back'] ) { // phpcs:ignore WordPress.Security.NonceVerification
+					wp_safe_redirect( self::url( 'whm-reports', array_filter( array( 'campaign' => $id, 'whm_msg' => $msg, 'whm_err' => $err ) ) ) );
+					exit;
+				}
 				break;
 			case 'delete':
 				if ( in_array( WHM_Sender::status( $id ), array( 'draft', 'sent', 'cancelled' ), true ) ) {
@@ -931,6 +961,31 @@ class WHM_Admin {
 		echo '<p class="whm-report-meta"><strong>' . esc_html( get_post_meta( $id, '_whm_subject', true ) ) . '</strong><br>'
 			. 'Sent ' . self::fmt_time( get_post_meta( $id, '_whm_started', true ) ) . ( $seg ? ' to “' . esc_html( $seg ) . '”' : '' ) . ' · ' . self::status_badge( WHM_Sender::status( $id ) ) // phpcs:ignore WordPress.Security.EscapeOutput
 			. ' · <a href="' . esc_url( self::url( 'whm-edit', array( 'campaign' => $id ) ) ) . '">View email</a></p>';
+
+		$until = WHM_Sender::throttled_until( $id );
+		if ( $until ) {
+			$t = get_post_meta( $id, '_whm_throttled', true );
+			echo '<div class="whm-warn"><strong>Waiting for the mail service.</strong> It refused more emails because of a sending limit, so sending has paused and will try again ' . self::fmt_time( $until ) . '. Nobody is marked as failed while this happens.' // phpcs:ignore WordPress.Security.EscapeOutput
+				. ( ! empty( $t['error'] ) ? '<br><span class="description">' . esc_html( $t['error'] ) . '</span>' : '' ) . '</div>';
+		}
+		$failed_groups = WHM_Sender::failed_errors( $id );
+		if ( $failed_groups && in_array( WHM_Sender::status( $id ), array( 'sending', 'paused', 'sent' ), true ) ) {
+			$n      = (int) $r['failed'];
+			$action = admin_url( 'admin-post.php?action=whm_campaign_action&do=retry&back=report&id=' . $id );
+			$ask    = sprintf( 'Re-send to the selected people who failed? Anyone who already got this email won\'t get it again.' );
+			echo '<form method="post" action="' . esc_url( $action ) . '" class="whm-retry" onsubmit="return confirm(' . esc_attr( wp_json_encode( $ask ) ) . ');">';
+			wp_nonce_field( 'whm_campaign_' . $id );
+			echo '<strong>' . sprintf( '%d %s failed to send.', $n, 1 === $n ? 'email' : 'emails' ) . '</strong> '; // phpcs:ignore WordPress.Security.EscapeOutput
+			echo '<label class="screen-reader-text" for="whm-only-error">Which failures</label><select name="only_error" id="whm-only-error">';
+			echo '<option value="__all__">All ' . (int) $n . ' failed</option>';
+			foreach ( $failed_groups as $g ) {
+				$label = '' === $g->error ? '(no error message)' : $g->error;
+				echo '<option value="' . esc_attr( $g->error ) . '">' . (int) $g->n . ' with: ' . esc_html( mb_strimwidth( $label, 0, 90, '…' ) ) . '</option>';
+			}
+			echo '</select> ';
+			submit_button( 'Retry failed', 'primary', 'submit', false );
+			echo '<p class="description">They go back in the queue for a fresh three tries. Anyone who has since unsubscribed or bounced is skipped.</p></form>';
+		}
 
 		$tile = function ( $label, $value, $sub = '' ) {
 			echo '<div class="whm-tile"><div class="whm-tile-label">' . esc_html( $label ) . '</div><div class="whm-tile-value">' . esc_html( $value ) . '</div>' . ( $sub ? '<div class="whm-tile-sub">' . esc_html( $sub ) . '</div>' : '' ) . '</div>';

@@ -19,6 +19,8 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
 - **Templates**: save any design as a template and start new campaigns from it. Five starter templates are included.
 - **Branding** set once in Settings: logo, colours, font, button style, sender, footer address.
 - **Batched sending** through Action Scheduler (bundled with WooCommerce), with adjustable batch size and interval to stay inside your mail provider's limits. Pause, resume, cancel and schedule for later.
+- **Sending limits handled**: if the mail service refuses an email because of a rate limit or daily/monthly quota, sending pauses and tries again 30 minutes later (filter `whm_limit_backoff`), without using up anyone's attempts or marking them failed.
+- **Retry failed**: re-send a campaign to just the people it failed for (all, or only those with a particular error). Nobody who already received it gets it twice, and anyone who has since unsubscribed or bounced is skipped.
 - **Test emails** to up to five addresses.
 - **Consent and compliance** (UK GDPR / PECR, and similar rules elsewhere):
   - every contact has a consent status (subscribed, customer, unsubscribed, bounced) with the wording, time, source and IP of their opt-in;

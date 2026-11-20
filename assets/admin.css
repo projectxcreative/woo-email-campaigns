@@ -102,3 +102,6 @@
 .whm-tile-value { font-size: 28px; line-height: 1.2; font-weight: 600; margin: 4px 0; color: #1d2327; }
 .whm-tile-sub { color: #646970; font-size: 12px; }
 .whm-url { word-break: break-all; }
+.whm-retry { background: #fff; border: 1px solid #dcdcde; border-left: 4px solid #dba617; border-radius: 4px; padding: 12px 14px; margin: 0 0 16px; }
+.whm-retry select { max-width: 520px; margin: 0 6px; }
+.whm-retry .description { margin: 6px 0 0; }

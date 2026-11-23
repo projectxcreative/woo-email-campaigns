@@ -67,6 +67,22 @@ class WHM_Segments {
 				'label' => 'Does not have an active subscription',
 				'input' => 'none',
 			),
+			'received_campaign'    => array(
+				'label' => 'Was sent campaign…',
+				'input' => 'campaigns',
+			),
+			'not_received_campaign' => array(
+				'label' => 'Was not sent campaign…',
+				'input' => 'campaigns',
+			),
+			'used_coupon'          => array(
+				'label' => 'Has used coupon code…',
+				'input' => 'coupon',
+			),
+			'not_used_coupon'      => array(
+				'label' => 'Has not used coupon code…',
+				'input' => 'coupon',
+			),
 			'joined_within'        => array(
 				'label' => 'Joined the list in the last…',
 				'input' => 'period',
@@ -107,8 +123,12 @@ class WHM_Segments {
 				case 'money':
 					$rule['value'] = max( 0, round( (float) ( $r['value'] ?? 0 ), 2 ) );
 					break;
+				case 'coupon':
+					$rule['value'] = function_exists( 'wc_format_coupon_code' ) ? wc_format_coupon_code( (string) ( $r['value'] ?? '' ) ) : strtolower( sanitize_text_field( (string) ( $r['value'] ?? '' ) ) );
+					break;
 				case 'products':
 				case 'categories':
+				case 'campaigns':
 					$rule['value'] = array_values( array_filter( array_map( 'absint', (array) ( $r['value'] ?? array() ) ) ) );
 					break;
 				case 'status':
@@ -157,12 +177,31 @@ class WHM_Segments {
 				return 'c.email IN (' . WHM_Orders::emails_active_subscription_sql() . ')';
 			case 'no_active_subscription':
 				return 'c.email NOT IN (' . WHM_Orders::emails_active_subscription_sql() . ')';
+			case 'received_campaign':
+				return 'c.id IN (' . self::campaign_recipients_sql( $r['value'] ) . ')';
+			case 'not_received_campaign':
+				return 'c.id NOT IN (' . self::campaign_recipients_sql( $r['value'] ) . ')';
+			case 'used_coupon':
+				return 'c.email IN (' . WHM_Orders::emails_used_coupon_sql( $r['value'] ) . ')';
+			case 'not_used_coupon':
+				return 'c.email NOT IN (' . WHM_Orders::emails_used_coupon_sql( $r['value'] ) . ')';
 			case 'joined_within':
 				return $wpdb->prepare( 'c.created_at >= %s', self::since( $r['value'], $r['unit'] ) );
 			case 'status_is':
 				return $wpdb->prepare( 'c.status = %s', $r['value'] );
 		}
 		return '1=1';
+	}
+
+	/**
+	 * Contact IDs the given campaigns were actually sent to (failed or skipped rows don't count).
+	 */
+	private static function campaign_recipients_sql( array $campaign_ids ) {
+		$ids = implode( ',', array_map( 'absint', $campaign_ids ) );
+		if ( '' === $ids ) {
+			$ids = '0';
+		}
+		return 'SELECT whm_q.contact_id FROM ' . WHM_Install::queue_table() . " whm_q WHERE whm_q.campaign_id IN ({$ids}) AND whm_q.status = 'sent'";
 	}
 
 	/**
@@ -277,6 +316,12 @@ class WHM_Segments {
 					break;
 				case 'status':
 					$label .= ' ' . $r['value'];
+					break;
+				case 'campaigns':
+					$label .= ' ' . implode( ', ', array_map( fn( $id ) => get_the_title( $id ), $r['value'] ) );
+					break;
+				case 'coupon':
+					$label .= ' ' . strtoupper( $r['value'] );
 					break;
 			}
 			$parts[] = $label;

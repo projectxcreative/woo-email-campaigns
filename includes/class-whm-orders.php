@@ -74,6 +74,31 @@ class WHM_Orders {
 	}
 
 	/**
+	 * Emails of customers with an order that used the given coupon code (case-insensitive).
+	 * Paid orders plus on-hold ones (e.g. bank transfer), since WooCommerce counts those as used.
+	 */
+	public static function emails_used_coupon_sql( $code ) {
+		global $wpdb;
+		$code = strtolower( trim( (string) $code ) );
+		if ( '' === $code ) {
+			return "SELECT ''";
+		}
+		$statuses = array_unique( array_merge( self::paid_statuses(), array( 'wc-on-hold' ) ) );
+		$in       = self::in_list( $statuses );
+		if ( self::hpos() ) {
+			$orders = "SELECT o.id AS order_id, LOWER(o.billing_email) AS email FROM {$wpdb->prefix}wc_orders o
+				WHERE o.type = 'shop_order' AND o.status IN ({$in}) AND o.billing_email <> ''";
+		} else {
+			$orders = "SELECT p.ID AS order_id, LOWER(em.meta_value) AS email FROM {$wpdb->posts} p
+				INNER JOIN {$wpdb->postmeta} em ON em.post_id = p.ID AND em.meta_key = '_billing_email'
+				WHERE p.post_type = 'shop_order' AND p.post_status IN ({$in}) AND em.meta_value <> ''";
+		}
+		return 'SELECT DISTINCT whm_co.email FROM (' . $orders . ") whm_co
+			INNER JOIN {$wpdb->prefix}woocommerce_order_items oi ON oi.order_id = whm_co.order_id AND oi.order_item_type = 'coupon'
+			WHERE LOWER(oi.order_item_name) = " . $wpdb->prepare( '%s', $code );
+	}
+
+	/**
 	 * Product IDs in the given product categories (children included).
 	 */
 	public static function product_ids_in_categories( array $term_ids ) {

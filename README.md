@@ -15,6 +15,8 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
   - total spent at least X
   - bought (or not bought) specific products, or from a category
   - has / hasn't an active subscription (WooCommerce Subscriptions)
+  - was (or wasn't) sent an earlier campaign, e.g. for a reminder to everyone who got the first email
+  - has (or hasn't) used a coupon code, e.g. remind people who haven't redeemed their discount yet
   - joined the list recently, or consent status
 - **Templates**: save any design as a template and start new campaigns from it. Five starter templates are included.
 - **Branding** set once in Settings: logo, colours, font, button style, sender, footer address.

@@ -38,6 +38,14 @@
 				return '<select multiple data-f="value" class="whm-multi" aria-label="Categories">' + S.cats.map(function (c) {
 					return '<option value="' + c.id + '"' + ((r.value || []).indexOf(c.id) > -1 ? ' selected' : '') + '>' + esc(c.title) + '</option>';
 				}).join('') + '</select>';
+			case 'campaigns':
+				var camps = S.campaigns || [];
+				if (!camps.length) { return '<em>No campaigns have been sent yet.</em>'; }
+				return '<select multiple data-f="value" class="whm-multi" aria-label="Campaigns">' + camps.map(function (c) {
+					return '<option value="' + c.id + '"' + ((r.value || []).indexOf(c.id) > -1 ? ' selected' : '') + '>' + esc(c.title) + '</option>';
+				}).join('') + '</select>';
+			case 'coupon':
+				return '<input type="text" class="regular-text" data-f="value" value="' + esc(r.value || '') + '" placeholder="e.g. WELCOME10" aria-label="Coupon code">';
 			case 'products':
 				var chosen = (r.value || []).map(function (id) {
 					return '<span class="whm-chip" data-id="' + id + '">' + esc(productNames[id] || ('#' + id)) + ' <button type="button" class="button-link whm-chip-x" aria-label="Remove">×</button></span>';
@@ -117,7 +125,8 @@
 			if (t === 'number') { r.value = 2; }
 			if (t === 'money') { r.value = 50; }
 			if (t === 'status') { r.value = 'subscribed'; }
-			if (t === 'products' || t === 'categories') { r.value = []; }
+			if (t === 'products' || t === 'categories' || t === 'campaigns') { r.value = []; }
+			if (t === 'coupon') { r.value = ''; }
 			render();
 		});
 		$w.on('input change', '[data-f]', function () {

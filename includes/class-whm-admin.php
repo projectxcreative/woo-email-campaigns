@@ -639,6 +639,32 @@ class WHM_Admin {
 		echo '</tbody></table></div>';
 	}
 
+	/**
+	 * Campaigns that have started sending, for the "was sent campaign" segment filter.
+	 */
+	private static function sent_campaign_choices() {
+		$out = array();
+		foreach ( get_posts(
+			array(
+				'post_type'      => 'whm_campaign',
+				'post_status'    => 'any',
+				'posts_per_page' => 200,
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+			)
+		) as $p ) {
+			$status = get_post_meta( $p->ID, '_whm_status', true );
+			if ( ! in_array( $status, array( 'sending', 'sent', 'paused', 'cancelled' ), true ) ) {
+				continue;
+			}
+			$out[] = array(
+				'id'    => $p->ID,
+				'title' => ( $p->post_title ? $p->post_title : '(untitled)' ) . ' (' . $status . ')',
+			);
+		}
+		return $out;
+	}
+
 	private static function segment_editor( $seg_id ) {
 		if ( $seg_id && 'whm_segment' !== get_post_type( $seg_id ) ) {
 			wp_die( 'Segment not found.' );
@@ -661,6 +687,7 @@ class WHM_Admin {
 			'def'   => $def,
 			'cats'  => $cats,
 			'currency' => html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ),
+			'campaigns' => self::sent_campaign_choices(),
 		);
 		self::header( $seg_id ? 'Edit segment' : 'New segment' );
 		echo '<script>window.WHMSEG = ' . wp_json_encode( $data ) . ';</script>';

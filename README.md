@@ -26,7 +26,7 @@ A self-hosted WordPress plugin for designing and sending branded marketing email
 - **Test emails** to up to five addresses.
 - **Consent and compliance** (UK GDPR / PECR, and similar rules elsewhere):
   - every contact has a consent status (subscribed, customer, unsubscribed, bounced) with the wording, time, source and IP of their opt-in;
-  - optional unticked opt-in box at checkout (block and classic checkout) and in My Account;
+  - optional checkout box (block and classic checkout): an unticked opt-in, or an opt-out ("tick if you'd rather not") for use with the soft opt-in, which records that each buyer was offered the choice; plus a My Account toggle;
   - "soft opt-in" for existing customers is off by default and must be switched on deliberately;
   - every email has an unsubscribe link plus `List-Unsubscribe` and one-click `List-Unsubscribe-Post` headers (Gmail/Yahoo bulk sender requirements);
   - unsubscribe page asks for confirmation, so link scanners can't unsubscribe people by accident;

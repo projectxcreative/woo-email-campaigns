@@ -60,6 +60,9 @@ class WHM_Settings {
 				'soft_opt_in'     => 0, // Allow emailing customers who have not opted in or out (PECR soft opt-in).
 				'checkout_opt_in' => 0,
 				'opt_in_label'    => 'Send me occasional news and offers by email. You can unsubscribe at any time.',
+				// 'opt_in': unticked box, tick to subscribe. 'opt_out': tick to refuse, for the PECR soft opt-in.
+				'checkout_mode'   => 'opt_in',
+				'opt_out_label'   => 'Tick this box if you\'d rather not get our occasional news and offers by email.',
 				'account_opt_in'  => 0,
 			)
 		);
@@ -86,7 +89,7 @@ class WHM_Settings {
 		$current = self::all();
 		$clean   = $current;
 
-		$text_keys = array( 'brand_name', 'font_family', 'from_name', 'opt_in_label', 'footer_note', 'signoff' );
+		$text_keys = array( 'brand_name', 'font_family', 'from_name', 'opt_in_label', 'opt_out_label', 'footer_note', 'signoff' );
 		foreach ( $text_keys as $k ) {
 			if ( isset( $input[ $k ] ) ) {
 				$clean[ $k ] = sanitize_text_field( wp_unslash( $input[ $k ] ) );
@@ -116,6 +119,9 @@ class WHM_Settings {
 		}
 		if ( isset( $input['button_style'] ) ) {
 			$clean['button_style'] = 'filled' === $input['button_style'] ? 'filled' : 'outline';
+		}
+		if ( isset( $input['checkout_mode'] ) ) {
+			$clean['checkout_mode'] = 'opt_out' === $input['checkout_mode'] ? 'opt_out' : 'opt_in';
 		}
 		if ( isset( $input['batch_size'] ) ) {
 			$clean['batch_size'] = max( 1, min( 500, absint( $input['batch_size'] ) ) );

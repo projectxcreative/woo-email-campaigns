@@ -6,8 +6,10 @@ defined( 'ABSPATH' ) || exit;
  * Both are off by default and are switched on in Settings.
  *
  * The checkout box is either an opt-in (tick to subscribe) or, for the PECR soft opt-in, an
- * opt-out (tick to refuse). In opt-out mode a tick unsubscribes the buyer; an empty box leaves
- * them as "customer", with a note that they were offered the choice.
+ * opt-out (tick to refuse). The latest checkout choice always wins:
+ * - opt-in: a tick subscribes; an empty box unsubscribes anyone already on the list.
+ * - opt-out: a tick unsubscribes; an empty box leaves a new buyer as "customer", with a note
+ *   that they were offered the choice, and leaves existing subscribers as they are.
  */
 class WHM_Consent {
 
@@ -89,6 +91,13 @@ class WHM_Consent {
 		if ( ! self::is_opt_out() ) {
 			if ( $ticked ) {
 				self::record( $order );
+				return;
+			}
+			// Left the opt-in box empty: their latest choice is "no", so take them off the list.
+			$contact = WHM_Contacts::get_by_email( $order->get_billing_email() );
+			if ( $contact && in_array( $contact->status, array( 'subscribed', 'customer' ), true ) ) {
+				WHM_Contacts::unsubscribe( $contact->id );
+				$order->add_order_note( 'Customer left the marketing box unticked at checkout, so they were taken off the email list.' );
 			}
 			return;
 		}

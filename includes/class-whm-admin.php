@@ -1138,6 +1138,11 @@ class WHM_Admin {
 		$field( 'checkout_opt_in', 'Checkout sign-up', 'checkbox', 'Show an unticked "keep me posted" box at checkout.' );
 		$field( 'account_opt_in', 'My Account sign-up', 'checkbox', 'Let customers opt in or out from My Account → Account details.' );
 		$field( 'opt_in_label', 'Sign-up wording', 'text', 'This exact wording is stored with each person\'s consent record.' );
+		echo '<tr><th scope="row">Checkout box type</th><td>'
+			. '<label><input type="radio" name="whm[checkout_mode]" value="opt_in"' . checked( $s['checkout_mode'], 'opt_in', false ) . '> Opt-in: customers tick to sign up (uses the sign-up wording)</label><br>'
+			. '<label><input type="radio" name="whm[checkout_mode]" value="opt_out"' . checked( $s['checkout_mode'], 'opt_out', false ) . '> Opt-out: customers tick to say no (uses the opt-out wording)</label>'
+			. '<p class="description">With soft opt-in on, use opt-out: buyers who leave it unticked become "Customer (soft opt-in)" and a tick unsubscribes them. With an opt-in box, emailing people who left it unticked goes against the choice they just made.</p></td></tr>';
+		$field( 'opt_out_label', 'Opt-out wording', 'text', 'Shown at checkout when the box type is opt-out.' );
 		echo '</table>';
 
 		echo '<h2>Reporting</h2><table class="form-table" role="presentation">';

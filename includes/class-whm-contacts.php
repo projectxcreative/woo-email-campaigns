@@ -119,6 +119,27 @@ class WHM_Contacts {
 		return $id;
 	}
 
+	/**
+	 * Keep evidence for the soft opt-in: the buyer was offered an opt-out and didn't take it.
+	 * Status stays "customer"; only the record text and time are stored.
+	 */
+	public static function note_offered_opt_out( $id, $text ) {
+		global $wpdb;
+		return $wpdb->update(
+			WHM_Install::contacts_table(),
+			array(
+				'consent_text' => (string) $text,
+				'consent_at'   => self::now(),
+				'consent_ip'   => self::ip(),
+				'updated_at'   => self::now(),
+			),
+			array(
+				'id'     => absint( $id ),
+				'status' => 'customer',
+			)
+		);
+	}
+
 	public static function unsubscribe( $id, $campaign_id = 0 ) {
 		global $wpdb;
 		return $wpdb->update(
